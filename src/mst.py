@@ -2,30 +2,30 @@
 
 
 def mst_edges(distances, vertices, check_time=None):
-    """Arestas da árvore no subconjunto de vértices informado."""
-    if len(vertices) < 2:
+    unvisited_cities = set(vertices)
+    if len(unvisited_cities) < 2:
         return []
 
-    remaining = set(vertices)
-    first = vertices[0]
-    remaining.remove(first)
-    cheapest = {city: distances[first][city] for city in remaining}
-    parent = {city: first for city in remaining}
-    edges = []
+    first_city = min(unvisited_cities)
+    unvisited_cities.remove(first_city)
+    cheapest_distance = {city: distances[first_city][city] for city in unvisited_cities}
+    parent_city = {city: first_city for city in unvisited_cities}
+    tree_edges = []
 
-    while remaining:
+    while unvisited_cities:
         if check_time is not None:
             check_time()
-        city = min(remaining, key=lambda city: (cheapest[city], city))
-        edges.append((parent[city], city))
-        remaining.remove(city)
-        for other in remaining:
-            if distances[city][other] < cheapest[other]:
-                cheapest[other] = distances[city][other]
-                parent[other] = city
+        next_city = min(unvisited_cities, key=lambda city: (cheapest_distance[city], city))
+        tree_edges.append((parent_city[next_city], next_city))
+        unvisited_cities.remove(next_city)
+        for city in unvisited_cities:
+            if distances[next_city][city] < cheapest_distance[city]:
+                cheapest_distance[city] = distances[next_city][city]
+                parent_city[city] = next_city
 
-    return edges
+    return tree_edges
 
 
 def mst_cost(distances, vertices, check_time=None):
-    return sum(distances[i][j] for i, j in mst_edges(distances, vertices, check_time))
+    tree_edges = mst_edges(distances, vertices, check_time)
+    return sum(distances[first_city][second_city] for first_city, second_city in tree_edges)

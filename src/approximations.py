@@ -3,56 +3,64 @@
 import networkx as nx
 
 from .mst import mst_edges
+from .profiling import measure
 
 
-def euler_shortcut(size, edges):
-    """Hierholzer em multigrafo, seguido da remoção de visitas repetidas."""
-    adjacency = [[] for _ in range(size)]
-    for edge_id, (a, b) in enumerate(edges):
-        adjacency[a].append((b, edge_id))
-        adjacency[b].append((a, edge_id))
+def euler_shortcut(number_of_cities, edges):
+    """Percorre todas as arestas com Hierholzer e elimina visitas repetidas."""
+    adjacency = [[] for _ in range(number_of_cities)]
+    for edge_id, (first_city, second_city) in enumerate(edges):
+        adjacency[first_city].append((second_city, edge_id))
+        adjacency[second_city].append((first_city, edge_id))
 
-    used = set()
+    used_edges = [False] * len(edges)
     stack = [0]
     circuit = []
     while stack:
-        city = stack[-1]
-        while adjacency[city] and adjacency[city][-1][1] in used:
-            adjacency[city].pop()
-        if adjacency[city]:
-            neighbor, edge_id = adjacency[city].pop()
-            used.add(edge_id)
-            stack.append(neighbor)
+        current_city = stack[-1]
+        while adjacency[current_city] and used_edges[adjacency[current_city][-1][1]]:
+            adjacency[current_city].pop()
+        if adjacency[current_city]:
+            next_city, edge_id = adjacency[current_city].pop()
+            used_edges[edge_id] = True
+            stack.append(next_city)
         else:
             circuit.append(stack.pop())
 
-    return list(dict.fromkeys(reversed(circuit)))
+    route = []
+    visited_cities = set()
+    for city in reversed(circuit):
+        if city not in visited_cities:
+            route.append(city)
+            visited_cities.add(city)
+    return route
 
 
 def minimum_matching(distances, odd_vertices):
     graph = nx.Graph()
     graph.add_nodes_from(odd_vertices)
-    for index, a in enumerate(odd_vertices):
-        for b in odd_vertices[index + 1:]:
-            graph.add_edge(a, b, weight=distances[a][b])
+    for index, first_city in enumerate(odd_vertices):
+        for second_city in odd_vertices[index + 1:]:
+            graph.add_edge(first_city, second_city, weight=distances[first_city][second_city])
     matching = nx.min_weight_matching(graph, weight="weight")
     if len(matching) * 2 != len(odd_vertices):
         raise ValueError("O emparelhamento não cobriu todos os vértices ímpares.")
-    return sorted((min(a, b), max(a, b)) for a, b in matching)
+    return sorted((min(first, second), max(first, second)) for first, second in matching)
 
 
 def twice_around_tree(distances, profile):
-    tree = profile.measure("mst", mst_edges, distances, list(range(len(distances))))
-    return profile.measure("euler", euler_shortcut, len(distances), tree + tree)
+    number_of_cities = len(distances)
+    tree_edges = measure(profile, "mst", mst_edges, distances, range(number_of_cities))
+    return measure(profile, "euler", euler_shortcut, number_of_cities, tree_edges + tree_edges)
 
 
 def christofides(distances, profile):
-    size = len(distances)
-    tree = profile.measure("mst", mst_edges, distances, list(range(size)))
-    degrees = [0] * size
-    for a, b in tree:
-        degrees[a] += 1
-        degrees[b] += 1
-    odd = [city for city in range(size) if degrees[city] % 2]
-    matching = profile.measure("matching", minimum_matching, distances, odd)
-    return profile.measure("euler", euler_shortcut, size, tree + matching)
+    number_of_cities = len(distances)
+    tree_edges = measure(profile, "mst", mst_edges, distances, range(number_of_cities))
+    degrees = [0] * number_of_cities
+    for first_city, second_city in tree_edges:
+        degrees[first_city] += 1
+        degrees[second_city] += 1
+    odd_vertices = [city for city in range(number_of_cities) if degrees[city] % 2]
+    matching = measure(profile, "matching", minimum_matching, distances, odd_vertices)
+    return measure(profile, "euler", euler_shortcut, number_of_cities, tree_edges + matching)

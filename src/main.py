@@ -1,32 +1,46 @@
-"""Execução de uma instância pela linha de comando."""
+"""Executa e salva um experimento por comando."""
 
 import argparse
-import json
+from pathlib import Path
 
-from .experiments import run_experiment, time_limit_arg
 from .heuristics import STRATEGIES
+from .instance import find_instance
+from .results import append_result, prepare_csv
+from .runner import RESULT_FIELDS, run_experiment
+from .timeout import time_limit_arg
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Resolve TSP com Branch-and-Bound.")
-    parser.add_argument("instance", help="Caminho do arquivo .tsp (EUC_2D)")
-    parser.add_argument("--strategy", choices=STRATEGIES, default="nearest")
-    parser.add_argument("--time-limit", type=time_limit_arg, default=1800)
-    parser.add_argument("--memory", action="store_true")
-    parser.add_argument("--initial-only", action="store_true")
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="Executa um experimento de TSP e salva em CSV.")
+    parser.add_argument("instance", help="Nome da instância ou caminho do arquivo .tsp")
+    parser.add_argument("--strategy", choices=STRATEGIES, default="trivial")
+    time_options = parser.add_mutually_exclusive_group()
+    time_options.add_argument("--time-limit", type=time_limit_arg, default=1800, help="Limite em segundos")
+    time_options.add_argument("--no-time-limit", action="store_true", help="Busca sem limite para comprovar o ótimo")
+    parser.add_argument("--memory", action="store_true", help="Mede memória em uma rodada separada")
+    parser.add_argument("--initial-only", action="store_true", help="Executa só a heurística inicial")
+    parser.add_argument("--output", type=Path, help="CSV de saída; por padrão, results/tempos.csv ou memoria.csv")
+    arguments = parser.parse_args()
 
-    result = run_experiment(args.instance, args.strategy, args.time_limit,
-                            args.memory, args.initial_only)
-    print(f"Instância: {result['instance']} | Cidades: {result['size']}")
-    print(f"Inicialização: {result['strategy']} | Custo inicial: {result['initial_cost']}")
-    print(f"Status: {result['status']} | Melhor custo: {result['best_cost']}")
-    print(f"Ótimo comprovado: {result['optimal_cost']}")
-    print(f"Tempo total: {result['total_seconds']:.6f} s")
+    try:
+        instance_path = find_instance(arguments.instance)
+        output_path = arguments.output or Path("results/memoria.csv" if arguments.memory else "results/tempos.csv")
+        prepare_csv(output_path, RESULT_FIELDS)
+        time_limit = None if arguments.no_time_limit else arguments.time_limit
+        limit_description = "sem limite" if time_limit is None else f"limite {time_limit:g} s"
+        print(f"Executando {instance_path.stem} | {arguments.strategy} | {limit_description}", flush=True)
+        result = run_experiment(instance_path, arguments.strategy, time_limit,
+                                arguments.memory, arguments.initial_only)
+        append_result(output_path, result)
+    except (ValueError, OSError) as error:
+        parser.exit(1, f"Erro: {error}\n")
+
+    print(f"Status: {result['status']}")
+    print(f"Custo inicial: {result['initial_cost']} | Melhor custo: {result['best_cost']}")
+    print(f"Referência ótima: {result['reference_cost']}")
+    print(f"Tempo: {result['total_seconds']:.3f} s")
     print(f"Nós expandidos: {result['nodes_expanded']} | Podados: {result['nodes_pruned']}")
-    route = json.loads(result["route"])
-    print("Rota (posição no arquivo, a partir de 1):")
-    print(" -> ".join(str(city + 1) for city in route + [route[0]]))
+    print(f"Resultado salvo em: {output_path}")
 
 
 if __name__ == "__main__":

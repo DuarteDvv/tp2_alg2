@@ -1,0 +1,23 @@
+NAME: st70_sub16
+TYPE: TSP
+COMMENT: Derived subset of st70; original node IDs 1 through 16; not an original TSPLIB instance
+DIMENSION: 16
+EDGE_WEIGHT_TYPE: EUC_2D
+NODE_COORD_SECTION
+1 64 96
+2 80 39
+3 69 23
+4 72 42
+5 48 67
+6 58 43
+7 81 34
+8 79 17
+9 30 23
+10 42 67
+11 7 76
+12 29 51
+13 78 92
+14 64 8
+15 95 57
+16 57 91
+EOF

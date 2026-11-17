@@ -2,7 +2,7 @@
 
 from .approximations import christofides, twice_around_tree
 from .convex_hull import hull_insertion
-from .profiling import Profiler
+from .profiling import create_profile
 
 
 STRATEGIES = ("trivial", "nearest", "hull", "twice", "christofides")
@@ -15,19 +15,19 @@ def trivial_route(distances):
 def nearest_neighbor(distances):
     """Começa na cidade 0 e escolhe a cidade não visitada mais próxima."""
     route = [0]
-    remaining = set(range(1, len(distances)))
+    remaining_cities = set(range(1, len(distances)))
 
-    while remaining:
-        current = route[-1]
-        next_city = min(remaining, key=lambda city: (distances[current][city], city))
+    while remaining_cities:
+        current_city = route[-1]
+        next_city = min(remaining_cities, key=lambda city: (distances[current_city][city], city))
         route.append(next_city)
-        remaining.remove(next_city)
+        remaining_cities.remove(next_city)
 
     return route
 
 
 def initial_route(strategy, distances, points, profile=None):
-    profile = profile if profile is not None else Profiler()
+    profile = profile if profile is not None else create_profile()
     if strategy == "trivial":
         return trivial_route(distances)
     if strategy == "nearest":

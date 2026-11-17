@@ -1,25 +1,31 @@
-"""Medição das etapas de inicialização; memória é opcional."""
+"""Tempos acumulados e picos adicionais de alocações Python por etapa."""
 
 from time import perf_counter
 import tracemalloc
 
 
-class Profiler:
-    def __init__(self, memory=False):
-        self.memory = memory
-        self.metrics = {}
-        self.peak_bytes = 0
+STAGES = ("read", "matrix", "hull", "insertion", "mst", "matching", "euler", "search_mst")
 
-    def measure(self, name, function, *args):
-        if self.memory:
-            self.peak_bytes = max(self.peak_bytes, tracemalloc.get_traced_memory()[1])
-            before = tracemalloc.get_traced_memory()[0]
-            tracemalloc.reset_peak()
-        start = perf_counter()
-        value = function(*args)
-        self.metrics[name + "_seconds"] = perf_counter() - start
-        if self.memory:
-            current, peak = tracemalloc.get_traced_memory()
-            self.metrics[name + "_peak_bytes"] = max(0, peak - before)
-            self.peak_bytes = max(self.peak_bytes, peak)
-        return value
+
+def create_profile(memory=False):
+    return {"memory": memory, "metrics": {}, "peak_bytes": 0}
+
+
+def measure(profile, stage, function, *arguments):
+    metrics = profile["metrics"]
+    metrics[stage + "_calls"] = metrics.get(stage + "_calls", 0) + 1
+    if profile["memory"]:
+        current_bytes, peak_bytes = tracemalloc.get_traced_memory()
+        profile["peak_bytes"] = max(profile["peak_bytes"], peak_bytes)
+        tracemalloc.reset_peak()
+    start_time = perf_counter()
+    try:
+        return function(*arguments)
+    finally:
+        elapsed_seconds = perf_counter() - start_time
+        metrics[stage + "_seconds"] = metrics.get(stage + "_seconds", 0) + elapsed_seconds
+        if profile["memory"]:
+            _, peak_bytes = tracemalloc.get_traced_memory()
+            key = stage + "_peak_bytes"
+            metrics[key] = max(metrics.get(key, 0), peak_bytes - current_bytes)
+            profile["peak_bytes"] = max(profile["peak_bytes"], peak_bytes)
