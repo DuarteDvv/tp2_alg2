@@ -1,11 +1,11 @@
-"""Executa e salva um experimento por comando."""
+"""executa e salva um experimento por comando."""
 
 import argparse
 from pathlib import Path
 
 from .heuristics import STRATEGIES
 from .instance import find_instance
-from .results import append_result, prepare_csv
+from .results import save_result, prepare_csv
 from .runner import RESULT_FIELDS, run_experiment
 from .timeout import time_limit_arg
 
@@ -31,7 +31,7 @@ def main():
         print(f"Executando {instance_path.stem} | {arguments.strategy} | {limit_description}", flush=True)
         result = run_experiment(instance_path, arguments.strategy, time_limit,
                                 arguments.memory, arguments.initial_only)
-        append_result(output_path, result)
+        save_result(output_path, result)
     except (ValueError, OSError) as error:
         parser.exit(1, f"Erro: {error}\n")
 
@@ -44,4 +44,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()

@@ -16,7 +16,7 @@ Escolha uma instância e uma inicialização:
 ```
 
 O comando executa **somente esse caso**, com limite de 30 minutos,
-mostra um resumo e acrescenta uma linha em `results/tempos.csv`.
+mostra um resumo e salva a medição em `results/tempos.csv`.
 Não inicia outras instâncias nem outras estratégias automaticamente.
 
 Para a próxima inicialização, execute outro comando:
@@ -62,6 +62,12 @@ O pico de cada subrotina é o maior acréscimo sobre a memória viva na sua
 entrada; não some esses picos. A rodada com memória também respeita 30 minutos,
 mas a instrumentação pode fazer a busca atingir esse limite mais cedo.
 
+- `peak_bytes`: pico total da execução, incluindo leitura e preparação.
+- `read_peak_bytes`: pico adicional da leitura do arquivo.
+- `subroutine_peak_bytes`: maior pico adicional das subrotinas, excluindo
+  a leitura. É o máximo das colunas por etapa, incluindo a construção da matriz;
+  não representa a memória total simultânea do algoritmo.
+
 Os custos de referência são calculados diretamente das rotas `.opt.tour`,
 quando disponíveis. Não é necessário criar ou preencher outra tabela.
 Para os subconjuntos, o ótimo só é conhecido quando o Branch-and-Bound
@@ -82,7 +88,8 @@ Timeouts mantêm soluções viáveis e contadores parciais, mas não declaram
 escrita do CSV ficam fora do tempo do algoritmo. Não some os tempos das
 subrotinas ao total, pois já estão incluídos nele.
 
-Repetir um comando acrescenta outra medição; não sobrescreve as anteriores.
+Repetir a mesma instância, estratégia, modo e limite substitui a medição
+anterior no arquivo escolhido. Para guardar repetições, use outro `--output`.
 CSVs antigos com outras colunas são recusados: use outro arquivo de saída.
 
 ## Código
