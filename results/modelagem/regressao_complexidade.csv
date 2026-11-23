@@ -1,0 +1,21 @@
+category,subroutine,x_variable,y_column,theoretical_complexity,samples,parameters,r2,rmse
+tempo,Matriz de Distâncias,N,matrix_seconds,Theta(N^2),15,"{""a"": 3.492551670203348e-05, ""b"": 0.0012403887722614027, ""c"": 0.025222477759602513}",0.8655338486548704,0.025418919916813443
+tempo,Vizinho Mais Próximo,N,initial_seconds,Theta(N^2),15,"{""a"": 3.617306656711339e-05, ""b"": 0.0189873956203076}",0.660101770378485,0.03311528977296934
+tempo,Fecho Convexo (Monotone Chain),N,hull_seconds,Theta(N log N),15,"{""a"": 5.83404565515421e-05, ""b"": 0.025077613940149675}",0.23775997420306016,0.011236232202353525
+tempo,Inserção Gulosa no Fecho,N,insertion_seconds,Theta(N^3),15,"{""a"": 1.10484539022071e-05, ""b"": 0.03433187360778833}",0.9978799503044969,0.044986709004965944
+tempo,MST Inicial (Prim Denso),N,mst_seconds,Theta(N^2),15,"{""a"": 3.9877558441703265e-05, ""b"": 0.022326468383190856}",0.9367219422342018,0.013222817787062933
+tempo,MST por Chamada no B&B,N,search_mst_per_call_seconds,O(N^2),15,"{""a"": 8.738635937139362e-06, ""b"": 0.004407973916639828}",0.9182824576777554,0.003325733004417342
+tempo,Matching Mínimo vs |O|,|O|,matching_seconds,O(|O|^3),15,"{""a"": 0.000996512780002866, ""b"": -0.9900928148148473}",0.8183960527655048,5.210269450660315
+tempo,Matching Mínimo vs N,N,matching_seconds,O(N^3),15,"{""a"": 0.0001303484288898149, ""b"": -1.0481904548266852}",0.886980771976644,4.1103017872651115
+tempo,Circuito Euleriano (Hierholzer),N,euler_seconds,Theta(N),15,"{""a"": 0.0003015402527986211, ""b"": 0.026905090099802034}",0.07530930665088542,0.017257997717986157
+tempo,B&B Exato (log10 T vs N),N,search_seconds,Exponencial (log10 T = aN + b),11,"{""a"": 0.17884755556945475, ""b"": -2.803696905152591}",0.6738926548334263,0.8842334203520514
+tempo,B&B Exato (T vs nós * N^2),nós * N^2,search_seconds,Theta(nós * N^2),55,"{""a"": 2.1468722801977914e-08, ""b"": -4.2821480707409645}",0.9806402100153068,32.46232607696968
+memoria,Matriz de Distâncias (Todas),N,matrix_peak_bytes,Theta(N^2),15,"{""a"": -0.010624364996537627, ""b"": 1.7987566126814443, ""c"": -23.05124188223561}",0.8517147405336106,6.844318798893256
+memoria,Matriz de Distâncias (sem st70),N,matrix_peak_bytes,Theta(N^2),11,"{""a"": 0.018743175391128908, ""b"": 0.1742571968029336, ""c"": -3.280727742215806}",0.9975215570638345,0.9131437636798273
+memoria,Fecho Convexo (Monotone Chain),N,hull_peak_bytes,Theta(N),15,"{""a"": 0.018855738954418277, ""b"": 0.901456604858057}",0.9869555861286614,0.035406112483027365
+memoria,Inserção Gulosa no Fecho,N,insertion_peak_bytes,Theta(N),15,"{""a"": 0.09017564849060367, ""b"": 1.269485434992673}",0.8053561756514439,0.7240804131805391
+memoria,MST Inicial (Prim Denso),N,mst_peak_bytes,Theta(N),15,"{""a"": 0.11939755347860859, ""b"": 0.9285858573237398}",0.8631655193566679,0.7764569256300007
+memoria,Matching Mínimo vs |O|,|O|,matching_peak_bytes,Theta(|O|^2),15,"{""a"": 0.29301622411435957, ""b"": 18.027813341336}",0.984168951068168,12.201987880438315
+memoria,Matching Mínimo vs N,N,matching_peak_bytes,O(N^2),15,"{""a"": 0.07005943615428055, ""b"": 22.231703674024075}",0.849435184599955,37.63028362542416
+memoria,Circuito Euleriano (Hierholzer),N,euler_peak_bytes,Theta(N),15,"{""a"": 0.25259896041583363, ""b"": 0.44285202585632655}",0.7618183898727329,2.306912667957743
+memoria,Busca B&B (DFS + MST por nível),N,search_mst_peak_bytes,Theta(N),15,"{""a"": 0.14265778063774492, ""b"": 0.1928535877315799}",0.9826308576307986,0.3097851956284309

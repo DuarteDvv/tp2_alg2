@@ -1,0 +1,50 @@
+=== Gap Nearest (%) (gap_nearest) ===
+|--- nearest_neighbor_cv <= 1.05
+|   |--- normalized_entropy <= 0.81
+|   |   |--- value: [10.94]
+|   |--- normalized_entropy >  0.81
+|   |   |--- value: [24.74]
+|--- nearest_neighbor_cv >  1.05
+|   |--- value: [48.28]
+
+=== Gap Hull (%) (gap_hull) ===
+|--- hull_fraction <= 0.19
+|   |--- value: [5.66]
+|--- hull_fraction >  0.19
+|   |--- mst_to_opt_ratio <= 0.74
+|   |   |--- value: [0.35]
+|   |--- mst_to_opt_ratio >  0.74
+|   |   |--- value: [2.46]
+
+=== Gap Twice (%) (gap_twice) ===
+|--- mst_to_opt_ratio <= 0.74
+|   |--- hull_fraction <= 0.40
+|   |   |--- value: [18.92]
+|   |--- hull_fraction >  0.40
+|   |   |--- value: [9.83]
+|--- mst_to_opt_ratio >  0.74
+|   |--- nearest_neighbor_cv <= 0.62
+|   |   |--- value: [37.26]
+|   |--- nearest_neighbor_cv >  0.62
+|   |   |--- value: [28.21]
+
+=== Gap Christofides (%) (gap_christofides) ===
+|--- hull_fraction <= 0.25
+|   |--- value: [15.76]
+|--- hull_fraction >  0.25
+|   |--- aspect_ratio <= 1.07
+|   |   |--- value: [10.20]
+|   |--- aspect_ratio >  1.07
+|   |   |--- value: [4.69]
+
+=== Esforço B&B (log10 nós / N) (bnb_effort_per_city) ===
+|--- mst_to_opt_ratio <= 0.76
+|   |--- nearest_neighbor_cv <= 1.04
+|   |   |--- value: [0.26]
+|   |--- nearest_neighbor_cv >  1.04
+|   |   |--- value: [0.37]
+|--- mst_to_opt_ratio >  0.76
+|   |--- hull_fraction <= 0.25
+|   |   |--- value: [0.12]
+|   |--- hull_fraction >  0.25
+|   |   |--- value: [0.19]
