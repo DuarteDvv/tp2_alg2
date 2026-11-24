@@ -1,0 +1,234 @@
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath}
+\usepackage{float}
+
+\usepackage[T1]{fontenc}
+\usepackage[provide=*]{babel}
+
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{indentfirst}
+
+     
+\sloppy
+
+\title{Trabalho Prático 2 - Análise Empírica e Otimização para o Caixeiro Viajante}
+
+\author{Eduardo Birchal, Luis Duarte}
+
+
+\address{Universidade Federal de Minas Gerais
+  \email{edubirchal@gmail.com, luisduarte.dev@gmail.com}
+}
+
+\begin{document} 
+
+\maketitle
+
+\section{Introdução}
+
+O Problema do Caixeiro Viajante (TSP) é um problema NP-difícil clássico na área da otimização: dado um grafo completo não direcionado com pesos simétricos e não negativos, a tarefa é encontrar um ciclo Hamiltoniano de peso total mínimo. Com $N$ vértices, o grafo terá $(N-1)!/2$ ciclos distintos, fazendo com que o problema cresça rapidamente em relação a $N$.
+
+Essa estrutura impõe um compromisso entre garantia de otimalidade e tempo de execução. Métodos exatos, como o Branch-and-Bound, comprovam a otimalidade da solução e não exigem desigualdade triangular, mas sofrem crescimento exponencial da árvore de busca quando os limites inferiores são frouxos. Já heurísticas construtivas e algoritmos de aproximação executam em tempo polinomial: sob desigualdade triangular, aproximações baseadas em Árvore Geradora Mínima, como Twice-around-the-tree e Christofides, garantem fatores de $2$ e $1{,}5$ em relação ao ótimo, respectivamente, mas sem certificar a otimalidade da rota encontrada.
+
+Este trabalho avalia empiricamente essas abordagens a partir de implementações em Python, com três objetivos: Auditar o código e modelar a complexidade temporal e espacial de cada subrotina; medir o impacto de cinco estratégias de warm-start na poda da árvore do Branch-and-Bound; e analisar a sensibilidade dos algoritmos às propriedades geométricas e topológicas das instâncias, incluindo a caracterização de casos adversariais.
+
+A Seção 2 apresenta as estruturas de dados, a arquitetura da busca exata, os gargalos identificados na auditoria e o protocolo usado para experimentos. A Seção 3 reporta o profiling das subrotinas, o efeito das inicializações na poda e a análise de sensibilidade. A Seção~4 sintetiza as conclusões.
+
+\section{Implementação, Profiling e Auditoria}
+
+\subsection{Estruturas de Dados e Escolhas Algorítmicas}
+
+A execução começa pela leitura do arquivo da TSPLIB e pela pré-computação da matriz de distâncias $N \times N$ como lista de listas de inteiros. O código calcula apenas o triângulo superior e espelha os valores para a metade inferior, aplicando as regras de arredondamento da TSPLIB para três métricas: \texttt{EUC\_2D} ($\lfloor \sqrt{\Delta x^2 + \Delta y^2} + 0{,}5 \rfloor$), \texttt{ATT} ($\lceil \sqrt{(\Delta x^2 + \Delta y^2)/10} \rceil$) e \texttt{GEO} (conversão de graus e minutos para radianos com distância esférica inteira $\lfloor 6378{,}388 \arccos(q) + 1 \rfloor$). Rotas são armazenadas como listas de $N$ índices, com o fechamento do ciclo sendo implícito no cálculo de custo.
+
+A MST é construída pelo algoritmo de Prim em versão densa $\Theta(N^2)$, sem fila de prioridades. A rotina mantém o conjunto de vértices não inclusos e dois dicionários com a menor distância conhecida e o vértice pai, escolhendo o próximo vértice por varredura linear (com desempate pelo menor índice). Em grafos completos, essa opção elimina o fator logarítmico e o custo de atualização de chaves de uma heap.
+
+Entre as 5 estratégias de inicialização, \texttt{trivial} usa a ordem das cidades no arquivo e \texttt{nearest} executa o vizinho mais próximo a partir da cidade~0 em $\Theta(N^2)$. A heurística \texttt{hull} obtém primeiro a envoltória convexa por Monotone Chain em $\Theta(N \log N)$: ela ordena os pontos por $(x, y, \mathrm{id})$, remove coordenadas duplicadas (inseridas na etapa seguinte) e constrói as cadeias inferior e superior via produto vetorial. Depois, ela escolhe a cada passo o vértice restante $v$ e a aresta $(u, w)$ do ciclo que minimizam $D[u][v] + D[v][w] - D[u][w]$; com até $O(N)$ inserções testando $O(N)$ candidatos em $O(N)$ posições, essa fase tem complexidade $\Theta(N^3)$.
+
+Os algoritmos Twice-around-the-tree e Christofides compartilham a MST e a extração do ciclo por circuito Euleriano. Em \texttt{euler\_shortcut}, o algoritmo de Hierholzer roda iterativamente com pilha partindo do vértice~0, listas de adjacência com identificador de aresta e um vetor booleano de arestas usadas para descarte em $O(1)$. O circuito é então percorrido em ordem reversa, descartando revisitas. Como o multigrafo tem $2(N-1)$ arestas no Twice-around-the-tree e no máximo $(N-1) + |O|/2$ no Christofides, o total de arestas é $\Theta(N)$ e a rotina executa em $\Theta(N)$. No Christofides, o subgrafo completo induzido pelos vértices de grau ímpar da MST é montado em \texttt{networkx.Graph} e resolvido por \texttt{networkx.min\_weight\_matching} para obter o matching de peso mínimo.
+
+\subsection{Estratégia da Árvore de Busca}
+
+O Branch-and-Bound utiliza DFS in-place com backtracking, fixando a cidade~0 como raiz. Em vez de manter uma fila de prioridades com estados clonados por nó (o que levaria a uso exponencial de memória), a busca opera sobre uma única lista mutável \texttt{path} e um único conjunto \texttt{unvisited\_cities}. Ao descer na recursão, cada candidato é anexado a \texttt{path} e removido de \texttt{unvisited\_cities}, sendo ambas as mutações revertidas em um bloco \texttt{finally} no retorno. A cópia rasa \texttt{path.copy()} ocorre somente quando uma rota completa melhora o incumbente \texttt{best\_cost}. Com profundidade máxima $N-1$ e vetores de contagem por nível de tamanho $N$, o consumo espacial da busca mantém-se linear em $\Theta(N)$.
+
+Antes da recursão, as linhas da matriz de distâncias são pré-ordenadas por distância uma única vez em \texttt{neighbors}, em $\Theta(N^2 \log N)$. Em cada nó expandido, a DFS percorre \texttt{neighbors[current\_city]} filtrando em $O(1)$ os vértices presentes em \texttt{unvisited\_cities}, priorizando arestas curtas nos primeiros ramos.
+
+O limite inferior é baseado no seguinte: para o vértice atual $u$ e o conjunto não vazio $U$ de cidades não visitadas, qualquer conclusão do ciclo precisa sair de $u$ para $U$, conectar os vértices de $U$ por um caminho Hamiltoniano (cujo custo é no mínimo $\mathrm{MST}(U)$) e retornar de $U$ para a origem~0:
+\[
+\mathrm{LB}(u, U) = \mathrm{MST}(U) + \min_{v \in U} D[u][v] + \min_{v \in U} D[0][v].
+\]
+Esse limitante depende apenas de simetria e não-negatividade das arestas, sem exigir desigualdade triangular. Sendo $c$ o custo acumulado do caminho e $c^*$ o melhor custo atual, a busca aplica primeiro o corte imediato $c \ge c^*$ e, em seguida, poda o ramo caso $c + \mathrm{LB}(u, U) \ge c^*$.
+
+\subsection{Gargalos do Código}
+
+A auditoria do código e os perfis de execução apontaram 3 gargalos:
+\begin{enumerate}
+  \item A pré-ordenação de \texttt{neighbors} na DFS adota o mesmo critério de distância mínima e desempate por índice de \texttt{nearest\_neighbor}. A partir da cidade~0, o primeiro mergulho até uma folha constrói a mesma rota da inicialização \texttt{nearest}, tornando esse warm-start redundante.
+  \item A busca fixa o vértice inicial~0, mas não quebra a simetria de reversão do TSP simétrico: o ciclo $(0, v_1, \dots, v_{N-1})$ e seu reverso $(0, v_{N-1}, \dots, v_1)$ têm custo idêntico e podem ser explorados em subárvores distintas.
+  \item Na etapa de emparelhamento do Christofides, montar o subgrafo completo $K_{|O|}$ em \texttt{networkx.Graph} eleva o tempo e o pico de memória em função de $|O|^2$.
+\end{enumerate}
+
+\subsection{Metodologia de Instrumentação e Conjunto de Teste}
+
+As coletas de tempo e memória ocorrem em rodadas separadas, para evitar que o rastreamento de alocações distorça os tempos medidos. O processo envolve cada subrotina (\texttt{read}, \texttt{matrix}, \texttt{hull}, \texttt{insertion}, \texttt{mst}, \texttt{matching}, \texttt{euler} e \texttt{search\_mst}) e acumula tempos usando \texttt{time.perf\_counter}. A extração de características geométricas e a gravação do CSV ficam fora da janela medida.
+
+Na rodada de memória, o módulo \texttt{tracemalloc} rastreia alocações do Python (e não o RSS do processo). Na entrada de cada subrotina, o programa registra a memória viva atual e chama \texttt{tracemalloc.reset\_peak()}; na saída, ele computa apenas o acréscimo de pico sobre esse patamar. Isso isola o buffer inicial de leitura de arquivo do pico real de cada etapa.
+
+O conjunto de teste contém 15 instâncias da TSPLIB com $N$ entre 10 e 70, separadas em duas faixas. A faixa principal ($N \le 34$) reúne três instâncias \texttt{GEO} originais (\texttt{burma14}, \texttt{ulysses16}, \texttt{ulysses22}) e nove subconjuntos formados pelos $N$ primeiros vértices de \texttt{att48} ($N \in \{10, 18, 26, 34\}$, \texttt{ATT}), \texttt{berlin52} ($N \in \{14, 20\}$, \texttt{EUC\_2D}) e \texttt{st70} ($N \in \{16, 24, 30\}$, \texttt{EUC\_2D}). A faixa de estresse ($N \ge 48$) inclui as instâncias completas \texttt{att48}, \texttt{berlin52} e \texttt{st70}. Subconjuntos da mesma origem compartilham cidades e não herdam o ótimo publicado da instância original.
+
+Cada par instância--estratégia tem orçamento de 30 minutos. Na busca exata, verificações de \texttt{perf\_counter} encerram a execução preservando a melhor solução e os contadores parciais. Como o fecho convexo 2D e as métricas espaciais exigem coordenadas planas, instâncias \texttt{GEO} passam por uma projeção retangular local centrada na região dos pontos (com ajuste de longitude em torno da primeira cidade). Essa projeção se restringe à orientação geométrica do fecho e à extração de features; todos os custos de arestas, inserções, MST, emparelhamento e busca utilizam a matriz \texttt{GEO} da TSPLIB.
+
+\section{Experimentos e Resultados}
+
+\subsection{Profiling de Subrotinas}
+
+As curvas empíricas de tempo e memória de cada subrotina foram ajustadas aos respectivos modelos teóricos por mínimos quadrados não lineares usando \texttt{scipy.optimize.curve\_fit}. A Tabela~\ref{tab:regressoes} reúne os $R^2$ e os erros quadráticos médios (RMSE) obtidos sobre o conjunto experimental.
+
+\begin{table}[ht]
+\centering
+\footnotesize
+\caption{Regressões empíricas de complexidade temporal e espacial por subrotina.}
+\label{tab:regressoes}
+\begin{tabular}{llrr}
+\hline
+Subrotina & Modelo teórico & $R^2$ & RMSE \\
+\hline
+\multicolumn{4}{l}{\textbf{Tempo de execução}} \\
+Matriz de distâncias & $\Theta(N^2)$ & 0,866 & 0,025 ms \\
+Vizinho mais próximo & $\Theta(N^2)$ & 0,660 & 0,033 ms \\
+Fecho convexo (Monotone Chain) & $\Theta(N \log N)$ & 0,238 & 0,011 ms \\
+Inserção gulosa no fecho & $\Theta(N^3)$ & 0,998 & 0,045 ms \\
+MST inicial (Prim denso) & $\Theta(N^2)$ & 0,937 & 0,013 ms \\
+MST por chamada no B\&B & $O(N^2)$ & 0,918 & 0,003 ms \\
+Matching mínimo vs. $|O|$ & $O(|O|^3)$ & 0,818 & 5,210 ms \\
+Matching mínimo vs. $N$ & $O(N^3)$ & 0,887 & 4,110 ms \\
+Circuito Euleriano (Hierholzer) & $\Theta(N)$ & 0,075 & 0,017 ms \\
+B\&B exato ($\log_{10} T$ vs. $N$) & Exponencial & 0,674 & 0,884 $\log_{10}$(s) \\
+B\&B exato (trabalho total) & $\Theta$(nós $\cdot$ $N^2$) & 0,981 & 32,462 s \\
+\hline
+\multicolumn{4}{l}{\textbf{Pico adicional de memória}} \\
+Matriz de distâncias (todas) & $\Theta(N^2)$ & 0,852 & 6,844 KiB \\
+Matriz de distâncias (sem st70) & $\Theta(N^2)$ & 0,998 & 0,913 KiB \\
+Fecho convexo (Monotone Chain) & $\Theta(N)$ & 0,987 & 0,035 KiB \\
+Inserção gulosa no fecho & $\Theta(N)$ & 0,805 & 0,724 KiB \\
+MST inicial (Prim denso) & $\Theta(N)$ & 0,863 & 0,776 KiB \\
+Matching mínimo vs. $|O|$ & $\Theta(|O|^2)$ & 0,984 & 12,202 KiB \\
+Matching mínimo vs. $N$ & $O(N^2)$ & 0,849 & 37,630 KiB \\
+Circuito Euleriano (Hierholzer) & $\Theta(N)$ & 0,762 & 2,307 KiB \\
+Busca B\&B (DFS + MST por nível) & $\Theta(N)$ & 0,983 & 0,310 KiB \\
+\hline
+\end{tabular}
+\end{table}
+
+No domínio temporal (Figura~\ref{fig:comp_tempo}), as subrotinas com maior volume de operações se aproximam das previsões assintóticas: a inserção na envoltória atinge $R^2$ de 0,998 sob $\Theta(N^3)$, a MST inicial alcança 0,937 sob $\Theta(N^2)$ e o custo médio de Prim por chamada dentro do Branch-and-Bound apresenta $R^2$ de 0,918. Para a busca exata, ajustar $\log_{10} T(N)$ apenas em função de $N$ resulta em $R^2$ moderado (0,674), pois instâncias de mesmo tamanho expandem quantidades muito distintas de nós. Quando o tempo de busca é modelado pelo trabalho total acumulado (nós $\cdot$ $N^2$), o ajuste sobe para $R^2$ de 0,981, confirmando que o custo de cada nó cresce quadraticamente com $N$.
+
+Em contraste, as rotinas de envoltura convexa ($R^2$ de 0,238) e circuito Euleriano ($R^2$ de 0,075) exibem baixa aderência temporal porque duram apenas dezenas de microssegundos nas instâncias avaliadas (RMSE de 0,011 ms e 0,017 ms). Nessa escala, o escalonamento do sistema operacional e o estado da cache superam a variação assintótica entre N = 10 e N = 70.
+\newpage
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=1.18\textwidth]{plots/fig_complexidade_tempo.png}
+\caption{Regressões de complexidade temporal por subrotina comparando medições empíricas e curvas teóricas ajustadas.}
+\label{fig:comp_tempo}
+\end{figure}
+
+Na análise espacial (Figura~\ref{fig:comp_memoria}), a DFS in-place confirma o crescimento linear $\Theta(N)$ com $R^2$ de 0,983, assim como a envoltória convexa ($R^2$ de 0,987). Dois desvios relevantes apareceram nas estruturas quadráticas e decorrem de detalhes do ambiente de execução:
+\begin{enumerate}
+  \item Na matriz de distâncias, o pico de memória cai de 54,7 KiB em berlin52 (N = 52) para 42,2 KiB em st70 (N = 70). Como as coordenadas de st70 se concentram em uma região compacta, quase todas as distâncias inteiras caem no Small Integer Cache do CPython (intervalo [-5, 256]), reutilizando objetos inteiros pré-alocados sem expandir a heap. Removendo a família st70 do ajuste, o $R^2$ do modelo $\Theta(N^2)$ sobe de 0,852 para 0,998.
+  \item Na etapa de emparelhamento do Christofides, o consumo de memória é explicado pela dimensão quadrática do número de vértices ímpares da MST ($\Theta(|O|^2)$, com $R^2$ de 0,984 e RMSE de 12,2 KiB), e não pelo total de cidades ($R^2$ de 0,849 e RMSE de 37,6 KiB). Isso reflete diretamente o tamanho do grafo completo montado no NetworkX, que chega a cerca de 350 KiB quando $|O|$ = 34.
+\end{enumerate}
+\newpage
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=1.15\textwidth]{plots/fig_complexidade_memoria.png}
+\caption{Regressões de complexidade espacial por subrotina, destacando o efeito do cache de inteiros do CPython em st70 e o crescimento quadrático em $|O|$ no emparelhamento.}
+\label{fig:comp_memoria}
+\end{figure}
+
+\subsection{Impacto do Warm-Start na Árvore de Busca}
+
+A Tabela~\ref{tab:warm_start} consolida os indicadores das cinco estratégias de inicialização sobre as 15 instâncias, separando os ganhos de busca nas 11 instâncias concluídas no ótimo e a qualidade do que foi feito nas 4 instâncias que atingiram o limite de 30 minutos (ulysses22, att48, berlin52 e st70).
+
+\newpage
+
+\begin{table}[ht]
+\centering
+\footnotesize
+\caption{Desempenho consolidado das estratégias de inicialização (redução de nós como média/máximo e economia líquida acumuladas nas 11 instâncias ótimas).}
+\label{tab:warm_start}
+\begin{tabular}{lrrrrr}
+\hline
+Estratégia & Gap ini. (\%) & Tempo ini. (ms) & Red. nós (\%) & Econ. líq. (s) & Gap timeout (\%) \\
+\hline
+Trivial & 162,99 & 0,006 & 0,00 / 0,00 & 0,0 & 5,48 \\
+Nearest & 23,28 & 0,056 & 0,04 / 0,33 & -1,5 & 5,48 \\
+Twice & 24,47 & 0,110 & 0,11 / 0,85 & -6,7 & 5,48 \\
+Christofides & 7,64 & 5,417 & 5,34 / 24,22 & 57,7 & 5,48 \\
+Hull & 1,90 & 0,615 & 12,94 / 50,45 & 110,3 & 3,20 \\
+\hline
+\end{tabular}
+\end{table}
+
+Nota-se que a inicialização nearest praticamente não altera a árvore de busca em relação à trivial: no total das 11 instâncias ótimas, a diferença é só de 12 nós. Em 8 das 11 instâncias a diferença é de exatamente 1 nó expandido, subindo para 2 ou 3 nós em att48\_sub18 e berlin52\_sub14 e invertendo para -1 nó em ulysses16. Como a DFS percorre os vizinhos ordenados por distância crescente a partir da cidade 0, o primeiro mergulho até uma folha constrói exatamente a rota nearest nos primeiros microssegundos, igualando o limite superior das duas estratégias logo no início da busca. Com gap inicial médio de 24,47\%, twice também raramente supera esse primeiro ramo, trazendo redução média de apenas 0,11\% nos nós expandidos.
+
+A poda efetiva só ocorre quando a heurística inicial entrega um limite superior menor que o do primeiro mergulho da DFS. Nesse aspecto, hull apresenta o melhor compromisso: ele reduz os nós expandidos em até 50,45\% (st70\_sub16) e 30,82\% (att48\_sub34), resultando em economia líquida acumulada de 110,3 s. Christofides alcança um gap inicial médio de 7,64\% em 5,42 ms, cortando até 24,22\% dos nós em st70\_sub16 e 21,55\% em att48\_sub34, com economia líquida de 57,7 s.
+
+Nas instâncias que estouram o orçamento de 30 minutos, apenas hull melhora o resultado final em relação às demais estratégias, reduzindo o gap médio em timeout de 5,48\% para 3,20\%. Os perfis por profundidade em att48\_sub34 (Figura~\ref{fig:warm_start}) mostram que o ganho concentra-se nos níveis intermediários: ao estreitar o limite superior desde a raiz, hull rebaixa o pico de nós expandidos de cerca de 106 mil para 74 mil (e christofides para 82 mil). Com menos subárvores abertas nesses níveis, o volume de nós podados também cai de 1,80 milhão para 1,33 milhão.
+
+\newpage
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=1.18\textwidth]{plots/fig_warm_start_poda.png}
+\caption{Redução percentual de nós expandidos por instância ótima, compromisso entre tempo e gap inicial, e perfis por profundidade em att48\_sub34.}
+\label{fig:warm_start}
+\end{figure}
+
+\subsection{Análise de Sensibilidade e Instâncias Adversariais}
+
+Para relacionar o desempenho dos algoritmos à geometria e à topologia das 15 instâncias, ajustamos correlações de Pearson, regressões lineares múltiplas padronizadas e árvores de decisão com profundidade máxima 2 sobre 7 atributos estruturais: aspect ratio, fração de vértices na envoltura convexa, entropia espacial normalizada, grau máximo da MST, fração de vértices ímpares da MST, cnearest neighbor CV e a razão entre o custo da MST e o ótimo. Os resultados estão resumidos na Figura~\ref{fig:sensibilidade}.
+
+\newpage
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=1.2\textwidth]{plots/fig_sensibilidade_features.png}
+\caption{Mapa de correlações de Pearson, importância das features nas árvores de decisão, tendências de Hull Fraction e Odd Fraction e isolamento das instâncias adversariais ulysses16 e ulysses22.}
+\label{fig:sensibilidade}
+\end{figure}
+
+\begin{itemize}
+  \item \textit{Envoltura Convexa + Inserção:} o gap inicial apresenta forte correlação negativa com a fração de pontos no fecho convexo (r = -0,644; coeficiente padronizado de -0,817). A árvore de decisão atinge $R^2$ de 0,811, com 69,4\% da importância nessa variável: quando até 19\% dos pontos pertencem à borda (caso de berlin52 e st70), o gap médio sobe para 5,66\%, pois a maior parte da rota depende da etapa gulosa de inserção sobre uma nuvem interna densa; acima desse limiar e com razão MST/ótimo até 0,74, o gap médio cai para 0,35\%.
+  \item \textit{Twice-around-the-tree e Christofides:} o aumento da entropia espacial eleva o gap de ambas as aproximações (r = +0,724 para twice e r = +0,676 para christofides), uma vez que pontos espalhados de forma mais uniforme produzem árvores geradoras mais ramificadas, encarecendo os atalhos Eulerianos e o subproblema de emparelhamento. Em christofides, o grau máximo da MST tem correlação de +0,648 (beta padronizado de +0,525) e a árvore de decisão alcança $R^2$ de 0,843 (83,0\% de importância para a fração no fecho). Em twice, a razão MST/ótimo domina tanto a correlação (r = +0,836) quanto a árvore ($R^2$ de 0,880, importância de 79,3\%). As violações pontuais da desigualdade triangular causadas pelo arredondamento EUC\_2D (chegando a 80 ternas em berlin52 e 379 em st70) não comprometeram as garantias práticas de 2,0 e 1,5: os maiores gaps registrados foram 40,81\% para twice e 18,36\% para christofides.
+  \item \textit{Instâncias adversariais:} essas duas instâncias GEO provocam colapso simultâneo no Branch-and-Bound e no vizinho mais próximo. Com o mesmo tamanho N = 16, ulysses16 expande 2.780.246 nós na estratégia trivial contra apenas 2.325 em st70\_sub16 (1.195 vezes mais nós). Já ulysses22 (N = 22) sofre timeout após 30 minutos com mais de 40 milhões de nós expandidos, enquanto att48\_sub34 (N = 34) conclui em menos de 8 minutos com menos de 1 milhão de nós. No vizinho mais próximo, ambas concentram os piores gaps do conjunto (45,62\% e 50,95\%), explicados pelo coeficiente de variação local (r = +0,713; beta de +0,993; árvore com $R^2$ de 0,827 isolando CV acima de 1,05 com gap médio de 48,28\%). Para o esforço normalizado do Branch-and-Bound ($\log_{10}$(nós)/N), destacam-se as correlações com nearest neighbor CV (r = +0,718), aspect ratio (r = +0,757) e razão MST/ótimo (r = -0,832); a regressão múltipla obtém $R^2$ de 0,911 e a árvore chega a $R^2$ de 0,955, isolando exatamente o regime adversarial na regra razão MST/ótimo até 0,76 e CV acima de 1,04. Geometricamente, ulysses16 e ulysses22 formam grupos insulares densos separados por grandes travessias (CV de 1,32 e 1,64; aspect ratio acima de 3,26): a MST conecta esses grupos pagando apenas uma aresta-ponte por travessia (razão MST/ótimo de 0,66), enquanto qualquer ciclo Hamiltoniano precisa entrar e sair de cada grupo, pagando as travessias em dobro. O limite inferior baseado em MST fica estruturalmente frouxo, adiando a poda para níveis profundos da árvore.
+\end{itemize}
+
+\section{Conclusões}
+Os experimentos confirmaram o comportamento assintótico esperado das subrotinas de maior custo, incluindo a inserção na envoltura convexa, a MST densa, o trabalho por nó do Branch-and-Bound e a linearidade espacial da busca DFS in-place. Ao mesmo tempo, o profiling mostrou que detalhes do ambiente de execução afetam diretamente os custos medidos: o cache de inteiros do CPython reduziu o pico de memória da matriz em st70, a sobrecarga de dicionários do NetworkX dominou o emparelhamento em função dos vértices ímpares e a criação repetida de estruturas na MST concentrou mais de 93\% do tempo da busca exata.
+
+Na avaliação das inicializações, ficou claro que o warm-start em uma DFS com ordenação gulosa só produz poda efetiva quando supera a solução encontrada no primeiro mergulho até uma folha. Por isso, nearest e twice trouxeram ganhos desprezíveis sobre trivial. A heurística de Envoltura Convexa com Inserção ofereceu o melhor equilíbrio prático, combinando custo abaixo de 1 ms, menor gap inicial médio, maior economia líquida acumulada e melhores rotas nas execuções limitadas por timeout.
+
+A análise de sensibilidade mostrou que a dificuldade prática do TSP para o Branch-and-Bound depende mais da topologia da instância do que apenas de $N$. Instâncias com grupos densos separados por longas travessias, como ulysses16 e ulysses22, reduzem a razão MST/ótimo e deixam o limite inferior frouxo, fazendo problemas menores exigirem ordens de grandeza maiores do que instâncias maiores com distribuição mais regular.
+
+
+\section*{Anexo: Histórico de Prompts Utilizados}
+Para fazer a parte de experimentação, foi usada a ajuda de LLMs para escrever o código. O prompt inicial usado foi o seguinte:
+
+\textit{Imagine que você é um cientista da computação e precisa realizar um experimento reproduzivel e eficiente. Crie um script que execute um algoritmo dentre os algoritmos implementados no código e registre logs de memoria e tempo de execucão. Os parâmetros devem ser --algoritmo e --instancia, além de opções para definir limite de tempo, caminho do arquivo de saída, execução apenas da heurística inicial e um modo separado para perfilamento de memória.}
+
+\textit{Registre o tempo acumulado e o número de chamadas, além de métricas da busca (nós visitados, expandidos e podados por profundidade), custo inicial, melhor custo, rota encontrada e gap em relação a solução ótima.}
+
+\textit{Tempo e memória devem ser coletados em rodadas distintas. Salve os resultados em CSV, lembrando de incluir o tipo de métrica, os parâmetros utilizados e o status da execução. Se o tempo máximo for atingido, pare a execução e preserve os resultados.}
+
+\end{document}

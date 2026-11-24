@@ -161,7 +161,7 @@ def fit_sensitivity_models(instance_df):
 def plot_sensitivity_figure(instance_df, corr_df, model_df, output_dir):
     """gera painel 2x2 com heatmap de correlação, pesos das features e casos adversariais."""
 
-    fig, axes = plt.subplots(2, 2, figsize=(14.0, 9.5))
+    fig, axes = plt.subplots(2, 2, figsize=(10.0, 8.0))
 
     # Painel 1: Heatmap de correlação de Pearson.
     ax1 = axes[0, 0]
@@ -230,7 +230,7 @@ def plot_sensitivity_figure(instance_df, corr_df, model_df, output_dir):
     x_line_c = np.linspace(x_odd.min(), x_odd.max(), 100)
     ax3_twin.plot(x_line_c, slope_c * x_line_c + intercept_c, color="#1f77b4", linestyle=":", linewidth=1.5)
 
-    ax3.set_title("Sensibilidade Geométrica: Hull Fraction e Vértices Ímpares", fontsize=10, fontweight="bold")
+    ax3.set_title("Sensibilidade Geométrica:\nHull Fraction e Vértices Ímpares", fontsize=10, fontweight="bold")
     ax3.set_xlabel("Proporção de vértices (Hull Fraction / MST Odd Fraction)", fontsize=9)
     ax3.set_ylabel("Gap Convex Hull (%)", color="#2ca02c", fontsize=9)
     ax3_twin.set_ylabel("Gap Christofides (%)", color="#1f77b4", fontsize=9)
@@ -257,7 +257,7 @@ def plot_sensitivity_figure(instance_df, corr_df, model_df, output_dir):
                          xytext=(dx, dy), textcoords="offset points", fontsize=8,
                          fontweight="bold" if "ulysses" in name else "normal")
 
-    ax4.set_title("Instâncias Adversariais: Heterogeneidade Local (CV) vs. Colapso B&B", fontsize=10, fontweight="bold")
+    ax4.set_title("Instâncias Adversariais:\nHeterogeneidade Local (CV) vs. Colapso B&B", fontsize=10, fontweight="bold")
     ax4.set_xlabel("Coeficiente de Variação do Vizinho Mais Próximo (CV)", fontsize=9)
     ax4.set_ylabel("Esforço B&B ($\\log_{10}(\\text{nós expandidos}) / N$)", fontsize=9)
     ax4.grid(True, linestyle="--", alpha=0.35)
